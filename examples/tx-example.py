@@ -7,6 +7,7 @@
 import os
 import binascii
 import time
+import random
 from iroha import IrohaCrypto
 from iroha import Iroha, IrohaGrpc
 from iroha.primitive_pb2 import can_set_my_account_detail
@@ -16,7 +17,8 @@ if sys.version_info[0] < 3:
     raise Exception('Python 3 or a more recent version is required.')
 
 ADMIN_ACCOUNT_ID = "admin@test"
-USER_ACCOUNT_ID = "userone@domain"
+USER_ACCOUNT_NAME = "userone{}".format(random.randint(1,99999))
+USER_ACCOUNT_ID = "{}@domain".format(USER_ACCOUNT_NAME)
 
 
 IROHA_HOST_ADDR = os.getenv('IROHA_HOST_ADDR', '127.0.0.1')
@@ -91,7 +93,7 @@ def create_account_userone():
     Create account 'userone@domain'
     """
     tx = iroha.transaction([
-        iroha.command('CreateAccount', account_name='userone', domain_id='domain',
+        iroha.command('CreateAccount', account_name=USER_ACCOUNT_NAME, domain_id='domain',
                       public_key=user_public_key)
     ])
     IrohaCrypto.sign_transaction(tx, ADMIN_PRIVATE_KEY)
@@ -111,14 +113,14 @@ def transfer_coin_from_admin_to_userone():
     send_transaction_and_print_status(tx)
 
 @trace
-def transfer_coin_from_userone_to_admin():
+def transfer_coin_from_userone_to_admin(send_amount='1.10'):
     """
     Transfer 1.10 'coin#domain' from 'userone@domain' to 'admin@test'
     """
     tx = iroha.transaction([
         iroha.command('TransferAsset', src_account_id=USER_ACCOUNT_ID, dest_account_id='admin@test',
-                      asset_id='coin#domain', description='get back', amount='1.10')
-    ])
+                      asset_id='coin#domain', description='get back', amount=send_amount)
+    ], creator_account=USER_ACCOUNT_ID)
     IrohaCrypto.sign_transaction(tx, user_private_key)
     send_transaction_and_print_status(tx)
 
@@ -142,7 +144,7 @@ def set_age_to_userone():
     """
     tx = iroha.transaction([
         iroha.command('SetAccountDetail',
-                      account_id='userone@domain', key='age', value='18')
+                      account_id=USER_ACCOUNT_ID, key='age', value='18')
     ])
     IrohaCrypto.sign_transaction(tx, ADMIN_PRIVATE_KEY)
     send_transaction_and_print_status(tx)
@@ -167,7 +169,7 @@ def get_account_assets():
     """
     List all the assets of userone@domain
     """
-    query = iroha.query('GetAccountAssets', account_id='userone@domain')
+    query = iroha.query('GetAccountAssets', account_id=USER_ACCOUNT_ID)
     IrohaCrypto.sign_query(query, ADMIN_PRIVATE_KEY)
 
     response = net.send_query(query)
@@ -181,7 +183,7 @@ def get_account_asset_transactions():
     """
     List all the transactions of userone@domain
     """
-    query = iroha.query('GetAccountAssetTransactions', account_id='userone@domain', asset_id='coin#domain', page_size=100)
+    query = iroha.query('GetAccountAssetTransactions', account_id=USER_ACCOUNT_ID, asset_id='coin#domain', page_size=10)
     IrohaCrypto.sign_query(query, ADMIN_PRIVATE_KEY)
 
     response = net.send_query(query)
@@ -196,7 +198,7 @@ def get_account_transactions():
     """
     List all the transactions of userone@domain
     """
-    query = iroha.query('GetAccountTransactions', account_id='userone@domain')
+    query = iroha.query('GetAccountTransactions', account_id=USER_ACCOUNT_ID)
     IrohaCrypto.sign_query(query, ADMIN_PRIVATE_KEY)
 
     response = net.send_query(query)
@@ -211,12 +213,12 @@ def get_userone_details():
     """
     Get all the kv-storage entries for userone@domain
     """
-    query = iroha.query('GetAccountDetail', account_id='userone@domain')
+    query = iroha.query('GetAccountDetail', account_id=USER_ACCOUNT_ID)
     IrohaCrypto.sign_query(query, ADMIN_PRIVATE_KEY)
 
     response = net.send_query(query)
     data = response.account_detail_response
-    print('Account id = {}, details = {}'.format('userone@domain', data.detail))
+    print('Account id = {}, details = {}'.format(USER_ACCOUNT_ID, data.detail))
 
 
 create_domain_and_asset()
