@@ -6,6 +6,7 @@
 
 import os
 import binascii
+import time
 from iroha import IrohaCrypto
 from iroha import Iroha, IrohaGrpc
 from iroha.primitive_pb2 import can_set_my_account_detail
@@ -13,6 +14,9 @@ import sys
 
 if sys.version_info[0] < 3:
     raise Exception('Python 3 or a more recent version is required.')
+
+ADMIN_ACCOUNT_ID = "admin@test"
+USER_ACCOUNT_ID = "userone@domain"
 
 
 IROHA_HOST_ADDR = os.getenv('IROHA_HOST_ADDR', '127.0.0.1')
@@ -48,6 +52,7 @@ def send_transaction_and_print_status(transaction):
     print('Transaction hash = {}, creator = {}'.format(
         hex_hash, transaction.payload.reduced_payload.creator_account_id))
     net.send_tx(transaction)
+    time.sleep(1)
     for status in net.tx_status_stream(transaction):
         print(status)
 
@@ -99,12 +104,23 @@ def transfer_coin_from_admin_to_userone():
     Transfer 2.00 'coin#domain' from 'admin@test' to 'userone@domain'
     """
     tx = iroha.transaction([
-        iroha.command('TransferAsset', src_account_id='admin@test', dest_account_id='userone@domain',
+        iroha.command('TransferAsset', src_account_id='admin@test', dest_account_id=USER_ACCOUNT_ID,
                       asset_id='coin#domain', description='init top up', amount='2.00')
     ])
     IrohaCrypto.sign_transaction(tx, ADMIN_PRIVATE_KEY)
     send_transaction_and_print_status(tx)
 
+@trace
+def transfer_coin_from_userone_to_admin():
+    """
+    Transfer 1.10 'coin#domain' from 'userone@domain' to 'admin@test'
+    """
+    tx = iroha.transaction([
+        iroha.command('TransferAsset', src_account_id=USER_ACCOUNT_ID, dest_account_id='admin@test',
+                      asset_id='coin#domain', description='get back', amount='1.10')
+    ])
+    IrohaCrypto.sign_transaction(tx, user_private_key)
+    send_transaction_and_print_status(tx)
 
 @trace
 def userone_grants_to_admin_set_account_detail_permission():
@@ -114,7 +130,7 @@ def userone_grants_to_admin_set_account_detail_permission():
     tx = iroha.transaction([
         iroha.command('GrantPermission', account_id='admin@test',
                       permission=can_set_my_account_detail)
-    ], creator_account='userone@domain')
+    ], creator_account=USER_ACCOUNT_ID)
     IrohaCrypto.sign_transaction(tx, user_private_key)
     send_transaction_and_print_status(tx)
 
@@ -160,6 +176,35 @@ def get_account_assets():
         print('Asset id = {}, balance = {}'.format(
             asset.asset_id, asset.balance))
 
+@trace
+def get_account_asset_transactions():
+    """
+    List all the transactions of userone@domain
+    """
+    query = iroha.query('GetAccountAssetTransactions', account_id='userone@domain', asset_id='coin#domain', page_size=100)
+    IrohaCrypto.sign_query(query, ADMIN_PRIVATE_KEY)
+
+    response = net.send_query(query)
+    data = response.transactions_page_response.transactions
+    print('Transaction amount = {}'.format(len(data)))
+    for transaction in data:
+        print('Transaction payload = {}'.format(
+            transaction.payload))
+
+@trace
+def get_account_transactions():
+    """
+    List all the transactions of userone@domain
+    """
+    query = iroha.query('GetAccountTransactions', account_id='userone@domain')
+    IrohaCrypto.sign_query(query, ADMIN_PRIVATE_KEY)
+
+    response = net.send_query(query)
+    data = response.transactions_response.transactions
+    print('Transaction amount = {}'.format(len(data)))
+    for transaction in data:
+        print('Transaction payload = {}'.format(
+            transaction.payload))
 
 @trace
 def get_userone_details():
@@ -178,10 +223,13 @@ create_domain_and_asset()
 add_coin_to_admin()
 create_account_userone()
 transfer_coin_from_admin_to_userone()
+transfer_coin_from_userone_to_admin()
 userone_grants_to_admin_set_account_detail_permission()
 set_age_to_userone()
 get_coin_info()
 get_account_assets()
 get_userone_details()
+get_account_transactions()
+get_account_asset_transactions()
 
 print('done')
